@@ -329,7 +329,7 @@ function M._handle_message(client, message)
 			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 
 			-- Write buffer to file
-			vim.api.nvim_buf_call(bufnr, vim.cmd.write)
+			vim.api.nvim_buf_call(bufnr, vim.cmd.update)
 		end)
 
 		if success then

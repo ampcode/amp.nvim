@@ -28,7 +28,7 @@ M.state = {
 	initialized = false,
 }
 
--- Rotate the auth token every hour so a leaked lockfile token has a
+-- Rotate the auth token every four hours so a leaked lockfile token has a
 -- bounded lifetime. New connections use the fresh token from the
 -- rewritten lockfile; established connections are unaffected.
 local TOKEN_ROTATION_INTERVAL_MS = 4 * 60 * 60 * 1000

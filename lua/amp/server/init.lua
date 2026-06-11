@@ -127,6 +127,16 @@ function M.start(auth_token)
 	return true, server.port
 end
 
+---Replace the auth token used to validate new connections.
+---Established connections are unaffected.
+---@param auth_token string The new authentication token
+function M.set_auth_token(auth_token)
+	M.state.auth_token = auth_token
+	if M.state.server then
+		M.state.server.auth_token = auth_token
+	end
+end
+
 ---Stop the WebSocket server
 ---@return boolean success Whether server stopped successfully
 ---@return string|nil error_message Error message if any

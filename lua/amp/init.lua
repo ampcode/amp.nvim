@@ -23,9 +23,39 @@ M.state = {
 	server = nil,
 	port = nil,
 	auth_token = nil,
+	token_rotation_timer = nil,
 	connected = false,
 	initialized = false,
 }
+
+-- Rotate the auth token every hour so a leaked lockfile token has a
+-- bounded lifetime. New connections use the fresh token from the
+-- rewritten lockfile; established connections are unaffected.
+local TOKEN_ROTATION_INTERVAL_MS = 4 * 60 * 60 * 1000
+
+---Rotate the auth token and rewrite the lockfile
+function M._rotate_auth_token()
+	if not M.state.server or not M.state.port then
+		return
+	end
+
+	local lockfile = require("amp.lockfile")
+	local ok, new_token = pcall(lockfile.generate_auth_token)
+	if not ok then
+		logger.error("init", "Failed to rotate auth token: " .. tostring(new_token))
+		return
+	end
+
+	local lock_success, lock_result = lockfile.create(M.state.port, new_token)
+	if not lock_success then
+		logger.error("init", "Failed to rewrite lock file during token rotation: " .. tostring(lock_result))
+		return
+	end
+
+	M.state.server.set_auth_token(new_token)
+	M.state.auth_token = new_token
+	logger.debug("init", "Auth token rotated")
+end
 
 ---Handle client connection event
 function M._on_client_connect()
@@ -137,6 +167,19 @@ function M.start()
 		return false, error_msg
 	end
 
+	-- Periodically rotate the auth token so it isn't long-lived
+	local timer = vim.loop.new_timer()
+	if timer then
+		timer:start(
+			TOKEN_ROTATION_INTERVAL_MS,
+			TOKEN_ROTATION_INTERVAL_MS,
+			vim.schedule_wrap(function()
+				M._rotate_auth_token()
+			end)
+		)
+		M.state.token_rotation_timer = timer
+	end
+
 	logger.info("init", "Server started on port " .. tostring(M.state.port))
 	return true, M.state.port
 end
@@ -148,6 +191,12 @@ function M.stop()
 	if not M.state.server then
 		logger.info("init", "Server is not running")
 		return false, "Not running"
+	end
+
+	if M.state.token_rotation_timer then
+		M.state.token_rotation_timer:stop()
+		M.state.token_rotation_timer:close()
+		M.state.token_rotation_timer = nil
 	end
 
 	local lockfile = require("amp.lockfile")

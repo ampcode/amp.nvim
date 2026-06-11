@@ -3,6 +3,38 @@ local utils = require("amp.server.utils")
 
 local M = {}
 
+---Compare two strings in constant time (relative to the expected string)
+---to avoid leaking token contents through comparison timing
+---@param expected string The expected secret value
+---@param provided string The value provided by the client
+---@return boolean equal True if the strings are equal
+local function constant_time_equals(expected, provided)
+	if #expected ~= #provided then
+		return false
+	end
+	local diff = 0
+	for i = 1, #expected do
+		if expected:byte(i) ~= provided:byte(i) then
+			diff = diff + 1
+		end
+	end
+	return diff == 0
+end
+
+---Check if a Host header points at the loopback addresses this server binds
+---to. Protects against DNS-rebinding attacks where a malicious site resolves
+---to 127.0.0.1.
+---@param host string|nil The Host header value
+---@return boolean valid True if the host is a loopback address
+local function is_loopback_host(host)
+	if not host then
+		return false
+	end
+	-- Strip optional port: "[::1]:1234", "127.0.0.1:1234", "localhost"
+	local hostname = host:match("^%[([^%]]+)%]") or host:match("^([^:]+)$") or host:match("^([^:]+):%d+$")
+	return hostname == "127.0.0.1" or hostname == "localhost" or hostname == "::1"
+end
+
 ---Check if an HTTP request is a valid WebSocket upgrade request
 ---@param request string The HTTP request string
 ---@param expected_auth_token string|nil Expected authentication token for validation
@@ -18,6 +50,18 @@ function M.validate_upgrade_request(request, expected_auth_token)
 
 	if not headers["connection"] or not headers["connection"]:lower():find("upgrade") then
 		return false, "Missing or invalid Connection header"
+	end
+
+	-- Reject requests with a non-loopback Host (DNS-rebinding protection)
+	if not is_loopback_host(headers["host"]) then
+		return false, "Invalid Host header (expected loopback address)"
+	end
+
+	-- Reject browser-originated connections. Legitimate clients (the Amp CLI)
+	-- are not browsers and do not send an Origin header; browsers always
+	-- include it on cross-origin WebSocket connections.
+	if headers["origin"] then
+		return false, "Browser connections are not allowed (unexpected Origin header)"
 	end
 
 	if not headers["sec-websocket-key"] then
@@ -67,7 +111,7 @@ function M.validate_upgrade_request(request, expected_auth_token)
 			return false, "Authentication token too short (min 10 characters)"
 		end
 
-		if provided_token ~= expected_auth_token then
+		if not constant_time_equals(expected_auth_token, provided_token) then
 			return false, "Invalid authentication token"
 		end
 	end

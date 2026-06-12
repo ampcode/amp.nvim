@@ -338,24 +338,8 @@ function M._handle_message(client, message)
 			-- Replace entire buffer content
 			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 
-			-- Use async file writing with vim.loop
-			local uv = vim.loop
-			local fd = uv.fs_open(full_path, "w", 438) -- 438 = 0666 in decimal
-			if not fd then
-				error("Cannot open file for writing")
-			end
-
-			-- Ensure file ends with newline (standard POSIX convention)
-			local content_to_write = fullContent
-			if content_to_write:sub(-1) ~= "\n" then
-				content_to_write = content_to_write .. "\n"
-			end
-
-			uv.fs_write(fd, content_to_write, 0)
-			uv.fs_close(fd)
-
-			-- Mark buffer as not modified since we just saved it
-			vim.api.nvim_set_option_value("modified", false, { buf = bufnr })
+			-- Write buffer to file
+			vim.api.nvim_buf_call(bufnr, vim.cmd.update)
 		end)
 
 		if success then

@@ -10,6 +10,7 @@ When installed, this plugin allows Neovim to:
 - Notify Amp about selected code
 - Send messages to the Amp agent (see [Sending Messages to Amp](#sending-messages-to-amp))
 - Read and edit files through the Neovim buffers
+- Provide Neovim LSP diagnostics to Amp through the companion Amp plugin
 - Automatically reconnects when you restart Neovim in the same directory
 
 ## Installation
@@ -22,7 +23,7 @@ Install the plugin by adding this code to your lazy.vim config:
   -- Amp Plugin
 {
   "sourcegraph/amp.nvim",
-  branch = "main", 
+  branch = "main",
   lazy = false,
   opts = { auto_start = true, log_level = "info" },
 }
@@ -59,7 +60,24 @@ require('amp').setup({ auto_start = true, log_level = "info" })
 
 Once installed, run `amp --ide`.
 
+## LSP Diagnostics
+
+This step is optional. The Neovim plugin works without it, but if you want Amp
+to read Neovim LSP diagnostics, install the companion Amp plugin included in
+this repo:
+
+```bash
+mkdir -p ~/.config/amp/plugins
+cp plugin/amp-neovim-diagnostics.ts ~/.config/amp/plugins/
+```
+
+Then start Neovim with this plugin enabled and run `amp --ide` in the same
+workspace. The companion plugin registers a `get_diagnostics` tool in Amp and
+pulls diagnostics from the running Neovim instance through amp.nvim's local
+WebSocket protocol.
+
 ### Healthcheck
+
 > Check the health of the plugin by running `:checkhealth amp` or to run all healthchecks run `:checkhealth`
 
 ## Sending Messages to Amp
